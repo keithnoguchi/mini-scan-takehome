@@ -7,10 +7,11 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"syscall"
 	"sync"
+	"syscall"
 
 	"cloud.google.com/go/pubsub"
+
 	"github.com/censys/scan-takehome/pkg/processing"
 )
 
@@ -49,6 +50,7 @@ func main() {
 	log.Println("Gracefully shutdown the processor")
 }
 
+// A Pub/sub scan data processor.
 func processor(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 
@@ -62,14 +64,18 @@ func processor(ctx context.Context, wg *sync.WaitGroup) {
 	// Create a processor to process messages.
 	processor := processing.NewProcessor()
 	receiver := func(ctx context.Context, msg *pubsub.Message) {
-		var scan processing.ValidScan
+		var scan processing.Scan
 		if err := scan.UnmarshalBinary(msg.Data); err != nil {
-			log.Printf("Dropping the invalid scan data")
+			log.Printf("Dropping the invalid scan data: %v", err)
 			msg.Ack()
 			return
 		}
-		processor.Process(ctx, scan.Scan)
-		msg.Ack()
+		if err := processor.Process(ctx, scan); err != nil {
+			msg.Nack()
+			log.Fatalf("Process error, exiting...: %v", err)
+		} else {
+			msg.Ack()
+		}
 	}
 	if err := sub.Receive(ctx, receiver); err != nil {
 		log.Fatalf("Pub/Sub receive failed: %v", err)

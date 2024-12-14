@@ -3,8 +3,6 @@ package processing
 import (
 	"context"
 	"log"
-
-	"github.com/censys/scan-takehome/pkg/scanning"
 )
 
 type inMemoryProcessor struct{}
@@ -16,6 +14,7 @@ func NewProcessor() Processor {
 	return &inMemoryProcessor{}
 }
 
-func (p *inMemoryProcessor) Process(ctx context.Context, msg scanning.Scan) {
-	log.Println(msg)
+func (p *inMemoryProcessor) Process(ctx context.Context, msg Scan) error {
+	log.Printf("%s", msg)
+	return nil
 }
