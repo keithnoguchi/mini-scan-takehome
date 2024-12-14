@@ -10,6 +10,8 @@ import (
 	"syscall"
 
 	"cloud.google.com/go/pubsub"
+	"github.com/censys/scan-takehome/pkg/processing"
+	"github.com/censys/scan-takehome/pkg/scanning"
 )
 
 func main() {
@@ -21,7 +23,7 @@ func main() {
 	)
 	subscriptionId := flag.String(
 		"subscription-id",
-		"scan-topic",
+		"scan-sub",
 		"GCP subscription ID",
 	)
 	flag.Parse()
@@ -35,6 +37,18 @@ func main() {
 	}
 	sub := client.Subscription(*subscriptionId)
 	log.Printf("Subscribed to %s\n", sub)
+
+	// Create a processor to process messages.
+	processor := processing.NewProcessor()
+	receiver := func(ctx context.Context, msg *pubsub.Message) {
+		log.Println(msg)
+		var scan scanning.Scan
+		processor.Process(ctx, scan)
+		msg.Ack()
+	}
+	if err := sub.Receive(ctx, receiver); err != nil {
+		log.Fatalf("Pub/Sub receive failed: %v", err)
+	}
 
 	// Cancel the context once the signal is sent.
 	c := make(chan os.Signal, 1)
