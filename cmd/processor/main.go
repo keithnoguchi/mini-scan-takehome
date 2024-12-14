@@ -11,7 +11,6 @@ import (
 
 	"cloud.google.com/go/pubsub"
 	"github.com/censys/scan-takehome/pkg/processing"
-	"github.com/censys/scan-takehome/pkg/scanning"
 )
 
 func main() {
@@ -41,9 +40,13 @@ func main() {
 	// Create a processor to process messages.
 	processor := processing.NewProcessor()
 	receiver := func(ctx context.Context, msg *pubsub.Message) {
-		log.Println(msg)
-		var scan scanning.Scan
-		processor.Process(ctx, scan)
+		var scan processing.ValidScan
+		if err := scan.UnmarshalBinary(msg.Data); err != nil {
+			log.Printf("Dropping the invalid scan data")
+			msg.Ack()
+			return
+		}
+		processor.Process(ctx, scan.Scan)
 		msg.Ack()
 	}
 	if err := sub.Receive(ctx, receiver); err != nil {
