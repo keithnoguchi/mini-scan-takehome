@@ -8,28 +8,50 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"sync"
 
 	"cloud.google.com/go/pubsub"
 	"github.com/censys/scan-takehome/pkg/processing"
 )
 
-func main() {
-	// Parses the command line arguments.
-	projectId := flag.String(
+var (
+	projectId = flag.String(
 		"project-id",
 		"test-project",
 		"GCP Project ID",
 	)
-	subscriptionId := flag.String(
+	subscriptionId = flag.String(
 		"subscription-id",
 		"scan-sub",
 		"GCP subscription ID",
 	)
+)
+
+func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
 	flag.Parse()
 
-	// Creates a pubsub client and subscribes to the pre-existing
-	// subscription channel.
-	ctx, cancel := context.WithCancel(context.Background())
+	// Creates a pubsub client goroutine to process
+	// the message through the subscription.
+	wg.Add(1)
+	go processor(ctx, &wg)
+
+	// Cancel the context once the signal is sent.
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	sig := <-c
+	log.Printf("Signal(%v) received", sig)
+	cancel()
+
+	// Wait for the processor to complete.
+	wg.Wait()
+	log.Println("Gracefully shutdown the processor")
+}
+
+func processor(ctx context.Context, wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	client, err := pubsub.NewClient(ctx, *projectId)
 	if err != nil {
 		log.Fatal(err)
@@ -51,25 +73,5 @@ func main() {
 	}
 	if err := sub.Receive(ctx, receiver); err != nil {
 		log.Fatalf("Pub/Sub receive failed: %v", err)
-	}
-
-	// Cancel the context once the signal is sent.
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	sig := <-c
-	log.Printf("Signal(%v) received", sig)
-	cancel()
-
-	// Wait for the child goroutines to cancel.
-	<-ctx.Done()
-	err = ctx.Err()
-	switch err {
-	case nil, context.Canceled:
-		log.Println("Gracefully shutdown the process")
-	default:
-		log.Fatalf(
-			"Received error(%v) during the shutdown process",
-			err,
-		)
 	}
 }
