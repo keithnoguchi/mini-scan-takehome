@@ -5,11 +5,13 @@ import (
 	"log"
 )
 
-func NewProcessor() Processor {
-	// XXX returns the simple log processor for now.
-	// XXX this should be controlled through the ProcessorConfig
-	// XXX as a follow up.
-	return &logProcessor{}
+func NewProcessor(cfg ProcessorConfig) Processor {
+	switch cfg.BackendType() {
+	case BackendScylla:
+		return &scyllaProcessor{}
+	default:
+		return &logProcessor{}
+	}
 }
 
 // Utility function to retrieve the log.Logger from the context.Context.

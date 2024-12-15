@@ -39,3 +39,31 @@ type Processor interface {
 	// Process processes the incoming Scan data.
 	Process(context.Context, Scan) error
 }
+
+// ProcessorConfig offers the map based Processor configuration.
+type ProcessorConfig map[string]any
+
+// ProcessorBackendType defines supported processor backend types.
+type ProcessorBackendType int
+
+const (
+	// Logging processor backend.
+	//
+	// It logs the scanned messages to the console.
+	BackendLogger ProcessorBackendType = iota
+
+	// ScyllaDB processor backend.
+	//
+	// It stores the scanned messages to the ScyllaDB datastore.
+	BackendScylla
+)
+
+func (c ProcessorConfig) BackendType() ProcessorBackendType {
+	if backend, ok := c["backendType"].(string); ok {
+		switch backend {
+		case "scylla":
+			return BackendScylla
+		}
+	}
+	return BackendLogger
+}

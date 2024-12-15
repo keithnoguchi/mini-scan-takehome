@@ -21,11 +21,18 @@ func main() {
 	projectId := flag.String("project-id", "test-project", "GCP Project ID")
 	subId := flag.String("subscription-id", "scan-sub", "Pub/Sub subscription ID")
 	n := flag.Int("concurrency", 2, "Number of concurrent processors")
+	backend := flag.String("backend-type", "logger", "Processor backend")
+	backendURL := flag.String("backend-url", "", "Processor backend URL")
 	flag.Parse()
 
 	// Creates the Pub/Sub processor builder.
 	ctx, cancel := context.WithCancel(context.Background())
-	b, err := NewBuilder(ctx, *projectId)
+	cfg := processing.ProcessorConfig{
+		"projectId":   *projectId,
+		"backendType": *backend,
+		"backendURL":  *backendURL,
+	}
+	b, err := NewBuilder(ctx, cfg)
 	if err != nil {
 		log.Fatalf("Can't create the Pub/Sub client: %v", err)
 	}
@@ -56,14 +63,17 @@ type Builder struct {
 	nextId    atomic.Uint32
 }
 
-func NewBuilder(ctx context.Context, projectId string) (*Builder, error) {
+func NewBuilder(
+	ctx context.Context,
+	cfg processing.ProcessorConfig,
+) (*Builder, error) {
 	// Creates a pubsub client goroutine to process
 	// the message through the subscription.
-	client, err := pubsub.NewClient(ctx, projectId)
+	client, err := pubsub.NewClient(ctx, cfg["projectId"].(string))
 	if err != nil {
 		return nil, err
 	}
-	processor := processing.NewProcessor()
+	processor := processing.NewProcessor(cfg)
 	return &Builder{
 		client:    client,
 		processor: processor,
