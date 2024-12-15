@@ -29,6 +29,28 @@ services:
         condition: service_completed_successfully
     command: PUT http://pubsub:8085/v1/projects/test-project/subscriptions/scan-sub topic=projects/test-project/topics/scan-topic --ignore-stdin 
 
+  # Starts the ScyllaDB single node instance
+  scylladb:
+    image: scylladb/scylla
+    ports:
+      - "9042:9042"
+    command: --default-log-level error
+    healthcheck:
+      test: ["CMD", "nodetool", "-h", "localhost", "status"]
+      interval: 5s
+      timeout: 10s
+      retries: 3
+
+  # Create 'censys' keyspace and 'services' table in ScyllaDB
+  mk-table:
+    image: scylladb/scylla
+    depends_on:
+      scylladb:
+        condition: service_healthy
+    volumes:
+      - "./scylla/schema.cql:/schema.cql"
+    entrypoint: ["cqlsh", "scylladb", "-f", "/schema.cql"]
+
   # Runs the "scanner"
   scanner:
     depends_on:
