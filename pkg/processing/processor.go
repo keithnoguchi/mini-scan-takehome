@@ -5,10 +5,14 @@ import (
 	"log"
 )
 
+// NewProcessor returns the new Processor instance.
+//
+// Please take a look at ProcessorConfig type how to configure
+// Processor.
 func NewProcessor(cfg ProcessorConfig) Processor {
 	switch cfg.BackendType() {
 	case BackendScylla:
-		return &scyllaProcessor{}
+		return newScyllaProcessor(cfg)
 	default:
 		return &logProcessor{}
 	}

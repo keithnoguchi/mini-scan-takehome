@@ -11,6 +11,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"syscall"
+	"time"
 
 	"cloud.google.com/go/pubsub"
 
@@ -21,8 +22,8 @@ func main() {
 	projectId := flag.String("project-id", "test-project", "GCP Project ID")
 	subId := flag.String("subscription-id", "scan-sub", "Pub/Sub subscription ID")
 	n := flag.Int("concurrency", 2, "Number of concurrent processors")
-	backend := flag.String("backend-type", "logger", "Processor backend")
-	backendURL := flag.String("backend-url", "", "Processor backend URL")
+	backend := flag.String("backend-type", "scylla", "Processor backend")
+	backendURL := flag.String("backend-url", "//scylladb:9042", "Processor backend URL")
 	flag.Parse()
 
 	// Creates the Pub/Sub processor builder.
@@ -44,20 +45,24 @@ func main() {
 		go b.build(ctx, &wg, *subId)
 	}
 
-	// Cancel the context once the signal is sent.
+	// Cancels the context once the signal is received.
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	sig := <-c
 	log.Printf("Signal(%v) received", sig)
 	cancel()
 
-	// Wait for the processor to complete.
+	// Wait for the processor to complete and close the processor
+	// builder to clean resources.
 	wg.Wait()
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+	b.close(ctx)
+	cancel()
 	log.Println("Gracefully shutdown the processor")
 }
 
-// Builder builds new processor.
-type Builder struct {
+// builder builds the new processor.
+type builder struct {
 	client    *pubsub.Client
 	processor processing.Processor
 	nextId    atomic.Uint32
@@ -66,7 +71,7 @@ type Builder struct {
 func NewBuilder(
 	ctx context.Context,
 	cfg processing.ProcessorConfig,
-) (*Builder, error) {
+) (*builder, error) {
 	// Creates a pubsub client goroutine to process
 	// the message through the subscription.
 	client, err := pubsub.NewClient(ctx, cfg["projectId"].(string))
@@ -74,13 +79,13 @@ func NewBuilder(
 		return nil, err
 	}
 	processor := processing.NewProcessor(cfg)
-	return &Builder{
+	return &builder{
 		client:    client,
 		processor: processor,
 	}, nil
 }
 
-func (b *Builder) build(
+func (b *builder) build(
 	ctx context.Context,
 	wg *sync.WaitGroup,
 	subscriptionId string,
@@ -112,4 +117,8 @@ func (b *Builder) build(
 
 	// Start to process messages.
 	return sub.Receive(ctx, receiver)
+}
+
+func (b *builder) close(ctx context.Context) {
+	b.processor.Close(ctx)
 }

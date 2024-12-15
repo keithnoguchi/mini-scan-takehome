@@ -4,6 +4,7 @@ package processing
 import (
 	"context"
 	"errors"
+	"net/url"
 )
 
 // ErrScanData indicates the invalid scan data.
@@ -38,6 +39,13 @@ var ErrScanDataEncoding = errors.New("Invalid scan data encoding")
 type Processor interface {
 	// Process processes the incoming Scan data.
 	Process(context.Context, Scan) error
+
+	// Close closes the processor.
+	//
+	// It's a good practice to call the Close when you finish
+	// using the Processor to release resources it may hold,
+	// e.g. database connections.
+	Close(context.Context)
 }
 
 // ProcessorConfig offers the map based Processor configuration.
@@ -66,4 +74,13 @@ func (c ProcessorConfig) BackendType() ProcessorBackendType {
 		}
 	}
 	return BackendLogger
+}
+
+func (c ProcessorConfig) BackendURL() url.URL {
+	if value, ok := c["backendURL"].(string); ok {
+		if url, err := url.Parse(value); err == nil {
+			return *url
+		}
+	}
+	return url.URL{}
 }
