@@ -15,28 +15,25 @@ import (
 	"github.com/censys/scan-takehome/pkg/processing"
 )
 
-var (
-	projectId = flag.String(
-		"project-id",
-		"test-project",
-		"GCP Project ID",
-	)
-	subscriptionId = flag.String(
-		"subscription-id",
-		"scan-sub",
-		"GCP subscription ID",
-	)
-)
-
 func main() {
-	ctx, cancel := context.WithCancel(context.Background())
-	var wg sync.WaitGroup
+	projectId := flag.String("project-id", "test-project", "GCP Project ID")
+	subId := flag.String("subscription-id", "scan-sub", "Pub/Sub subscription ID")
+	n := flag.Int("concurrency", 1, "Number of concurrent processors")
 	flag.Parse()
 
-	// Creates a pubsub client goroutine to process
-	// the message through the subscription.
-	wg.Add(1)
-	go processor(ctx, &wg)
+	// Creates the Pub/Sub processor builder.
+	ctx, cancel := context.WithCancel(context.Background())
+	b, err := NewBuilder(ctx, *projectId)
+	if err != nil {
+		log.Fatalf("Can't create the Pub/Sub client: %v", err)
+	}
+
+	// Spawns the processor goroutine(s).
+	var wg sync.WaitGroup
+	for i := 0; i < *n; i++ {
+		wg.Add(1)
+		go b.build(ctx, &wg, *subId)
+	}
 
 	// Cancel the context once the signal is sent.
 	c := make(chan os.Signal, 1)
@@ -50,19 +47,38 @@ func main() {
 	log.Println("Gracefully shutdown the processor")
 }
 
-// A Pub/sub scan data processor.
-func processor(ctx context.Context, wg *sync.WaitGroup) {
+// Builder builds new processor.
+type Builder struct {
+	client    *pubsub.Client
+	processor processing.Processor
+}
+
+func NewBuilder(ctx context.Context, projectId string) (*Builder, error) {
+	// Creates a pubsub client goroutine to process
+	// the message through the subscription.
+	client, err := pubsub.NewClient(ctx, projectId)
+	if err != nil {
+		return nil, err
+	}
+	processor := processing.NewProcessor()
+	return &Builder{
+		client:    client,
+		processor: processor,
+	}, nil
+}
+
+func (b *Builder) build(
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	subscriptionId string,
+) error {
 	defer wg.Done()
 
-	client, err := pubsub.NewClient(ctx, *projectId)
-	if err != nil {
-		log.Fatal(err)
-	}
-	sub := client.Subscription(*subscriptionId)
+	// Subscribe to the topic identified with the Pub/Sub subscriptionId.
+	sub := b.client.Subscription(subscriptionId)
 	log.Printf("Subscribed to %s\n", sub)
 
-	// Create a processor to process messages.
-	processor := processing.NewProcessor()
+	// Receiver to process messages.
 	receiver := func(ctx context.Context, msg *pubsub.Message) {
 		var scan processing.Scan
 		if err := scan.UnmarshalBinary(msg.Data); err != nil {
@@ -70,14 +86,14 @@ func processor(ctx context.Context, wg *sync.WaitGroup) {
 			msg.Ack()
 			return
 		}
-		if err := processor.Process(ctx, scan); err != nil {
+		if err := b.processor.Process(ctx, scan); err != nil {
 			msg.Nack()
 			log.Fatalf("Process error, exiting...: %v", err)
 		} else {
 			msg.Ack()
 		}
 	}
-	if err := sub.Receive(ctx, receiver); err != nil {
-		log.Fatalf("Pub/Sub receive failed: %v", err)
-	}
+
+	// Start to process messages.
+	return sub.Receive(ctx, receiver)
 }
