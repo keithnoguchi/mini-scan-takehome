@@ -1,13 +1,10 @@
 package processing
 
-import (
-	"context"
-	"log"
-)
+import "context"
 
-type logger struct{}
+type logProcessor struct{}
 
-func (p *logger) Process(ctx context.Context, msg Scan) error {
-	log.Printf("%s", msg)
+func (p *logProcessor) Process(ctx context.Context, msg Scan) error {
+	logger(ctx).Printf("%s", msg)
 	return nil
 }

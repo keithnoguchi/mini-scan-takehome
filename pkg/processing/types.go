@@ -36,5 +36,6 @@ var ErrScanDataEncoding = errors.New("Invalid scan data encoding")
 
 // Processor interface to represent the message processor.
 type Processor interface {
+	// Process processes the incoming Scan data.
 	Process(context.Context, Scan) error
 }

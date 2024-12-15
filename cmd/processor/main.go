@@ -4,10 +4,12 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"sync"
+	"sync/atomic"
 	"syscall"
 
 	"cloud.google.com/go/pubsub"
@@ -18,7 +20,7 @@ import (
 func main() {
 	projectId := flag.String("project-id", "test-project", "GCP Project ID")
 	subId := flag.String("subscription-id", "scan-sub", "Pub/Sub subscription ID")
-	n := flag.Int("concurrency", 1, "Number of concurrent processors")
+	n := flag.Int("concurrency", 2, "Number of concurrent processors")
 	flag.Parse()
 
 	// Creates the Pub/Sub processor builder.
@@ -51,6 +53,7 @@ func main() {
 type Builder struct {
 	client    *pubsub.Client
 	processor processing.Processor
+	nextId    atomic.Uint32
 }
 
 func NewBuilder(ctx context.Context, projectId string) (*Builder, error) {
@@ -73,22 +76,25 @@ func (b *Builder) build(
 	subscriptionId string,
 ) error {
 	defer wg.Done()
+	name := fmt.Sprintf("[processor%02d] ", b.nextId.Add(1))
+	logger := log.New(os.Stderr, name, log.LUTC)
 
 	// Subscribe to the topic identified with the Pub/Sub subscriptionId.
 	sub := b.client.Subscription(subscriptionId)
-	log.Printf("Subscribed to %s\n", sub)
+	logger.Printf("subscribed to %s\n", sub)
 
 	// Receiver to process messages.
 	receiver := func(ctx context.Context, msg *pubsub.Message) {
+		ctx = context.WithValue(ctx, "logger", logger)
 		var scan processing.Scan
 		if err := scan.UnmarshalBinary(msg.Data); err != nil {
-			log.Printf("Dropping the invalid scan data: %v", err)
+			logger.Printf("Dropping the invalid scan data: %v", err)
 			msg.Ack()
 			return
 		}
 		if err := b.processor.Process(ctx, scan); err != nil {
 			msg.Nack()
-			log.Fatalf("Process error, exiting...: %v", err)
+			logger.Fatalf("Process error, exiting...: %v", err)
 		} else {
 			msg.Ack()
 		}

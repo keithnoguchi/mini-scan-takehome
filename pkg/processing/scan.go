@@ -40,7 +40,7 @@ type Scan struct {
 // String represents the Scan data.
 func (s Scan) String() string {
 	return fmt.Sprintf(
-		"[%s] %s:%d/%s: %s",
+		"%s: %s:%d/%s: %s",
 		s.Timestamp.UTC().Format("01/02 03:04:05"),
 		s.Ip, s.Port, s.Service, s.Data,
 	)
