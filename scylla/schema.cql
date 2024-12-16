@@ -8,5 +8,5 @@ CREATE TABLE IF NOT EXISTS censys.services (
   service text,
   data text,
   timestamp timestamp,
-  PRIMARY KEY (ip, port, service)
+  PRIMARY KEY (ip, port)
 );
