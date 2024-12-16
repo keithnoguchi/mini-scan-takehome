@@ -23,7 +23,7 @@ var servicesTable = table.New(table.Metadata{
 	Name:    "censys.services",
 	Columns: []string{"ip", "port", "service", "data", "timestamp"},
 	PartKey: []string{"ip"},
-	SortKey: []string{"port"},
+	SortKey: []string{"port", "service"},
 })
 
 func newScyllaProcessor(cfg ProcessorConfig) Processor {
