@@ -9,12 +9,12 @@ import (
 //
 // Please take a look at ProcessorConfig type how to configure
 // Processor.
-func NewProcessor(cfg ProcessorConfig) Processor {
+func NewProcessor(cfg ProcessorConfig) (Processor, error) {
 	switch cfg.BackendType() {
 	case BackendScylla:
 		return newScyllaProcessor(cfg)
 	default:
-		return &logProcessor{}
+		return &logProcessor{}, nil
 	}
 }
 

@@ -35,7 +35,7 @@ func main() {
 	}
 	b, err := NewBuilder(ctx, cfg)
 	if err != nil {
-		log.Fatalf("Can't create the Pub/Sub client: %v", err)
+		log.Fatalf("Can't create the processor builder: %v", err)
 	}
 
 	// Spawns the processor goroutine(s).
@@ -78,7 +78,10 @@ func NewBuilder(
 	if err != nil {
 		return nil, err
 	}
-	processor := processing.NewProcessor(cfg)
+	processor, err := processing.NewProcessor(cfg)
+	if err != nil {
+		return nil, err
+	}
 	return &builder{
 		client:    client,
 		processor: processor,

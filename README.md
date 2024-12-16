@@ -278,9 +278,6 @@ the [ScyllaDB][] processor backend:
 
 ```golang
 func (p *scyllaProcessor) Process(ctx context.Context, msg Scan) error {
-	if err := p.getSession(); err != nil {
-		return err
-	}
 	// WithTimestamp gurantees the latest scanned entries in the
 	// ScyllaDB datastore.
 	//
