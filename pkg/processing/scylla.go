@@ -54,7 +54,9 @@ func (p *scyllaProcessor) Process(ctx context.Context, msg Scan) error {
 func (p *scyllaProcessor) Close(ctx context.Context) {
 	// We don't need the memory serialization here, as
 	// gocql.Session.Close() is concurrency safe.
-	p.session.Close()
+	if !p.session.Closed() {
+		p.session.Close()
+	}
 }
 
 // For lazy initialization of Scylla session by aquireSession().
