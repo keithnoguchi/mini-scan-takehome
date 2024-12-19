@@ -2,6 +2,7 @@ package processing
 
 import (
 	"context"
+	"errors"
 	"log"
 )
 
@@ -9,12 +10,12 @@ import (
 //
 // Please take a look at ProcessorConfig type how to configure
 // Processor.
-func NewProcessor(cfg ProcessorConfig) (Processor, error) {
+func NewProcessor(cfg ProcessorConfig) Processor {
 	switch cfg.BackendType() {
 	case BackendScylla:
 		return newScyllaProcessor(cfg)
 	default:
-		return &logProcessor{}, nil
+		return &logProcessor{}
 	}
 }
 
@@ -25,4 +26,11 @@ func logger(ctx context.Context) *log.Logger {
 	} else {
 		return log.Default()
 	}
+}
+
+// Utility function to wrap the processing backend error with the
+// generic ErrBackend error.
+func backendError(errs ...error) error {
+	errs = append(errs, ErrBackend)
+	return errors.Join(errs...)
 }

@@ -2,6 +2,7 @@ package processing
 
 import (
 	"context"
+	"sync"
 
 	"github.com/gocql/gocql"
 	"github.com/scylladb/gocqlx/v3"
@@ -9,6 +10,15 @@ import (
 )
 
 type scyllaProcessor struct {
+	// Scylla cluster configuration.
+	clusterCfg *gocql.ClusterConfig
+
+	// For lazy initialization of Scylla session.
+	sessionOnce sync.Once
+
+	// Session creation error.
+	sessionErr error
+
 	// Scylla session.
 	session gocqlx.Session
 }
@@ -26,18 +36,17 @@ var servicesTable = table.New(table.Metadata{
 	SortKey: []string{"port", "service"},
 })
 
-func newScyllaProcessor(cfg ProcessorConfig) (Processor, error) {
-	clusterCfg := gocql.NewCluster(cfg.BackendURL().Host)
-	session, err := gocqlx.WrapSession(clusterCfg.CreateSession())
-	if err != nil {
-		return nil, err
-	}
+func newScyllaProcessor(cfg ProcessorConfig) Processor {
 	return &scyllaProcessor{
-		session: session,
-	}, nil
+		clusterCfg:  gocql.NewCluster(cfg.BackendURL().Host),
+		sessionOnce: sync.Once{},
+	}
 }
 
 func (p *scyllaProcessor) Process(ctx context.Context, msg Scan) error {
+	if err := p.aquireSession(); err != nil {
+		return err
+	}
 	// WithTimestamp gurantees the latest scanned entries in the
 	// ScyllaDB datastore.
 	//
@@ -50,7 +59,23 @@ func (p *scyllaProcessor) Process(ctx context.Context, msg Scan) error {
 }
 
 func (p *scyllaProcessor) Close(ctx context.Context) {
-	// We don't need to serialize here, as gocql.Session.Close()
-	// is concurrency safe.
+	// We don't need the memory serialization here, as
+	// gocql.Session.Close() is concurrency safe.
 	p.session.Close()
+}
+
+// Utility function to acquire the ScyllaDB session lazily.
+func (p *scyllaProcessor) aquireSession() error {
+	p.sessionOnce.Do(func() {
+		session, err := gocqlx.WrapSession(p.clusterCfg.CreateSession())
+		if err != nil {
+			// We record the error when we couldn't create
+			// a session and keep the error for the later
+			// reference.
+			p.sessionErr = backendError(err)
+			return
+		}
+		p.session = session
+	})
+	return p.sessionErr
 }
