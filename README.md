@@ -440,4 +440,4 @@ and see if it's easily swappable with the processing.Processor interface.
 
 Thank you, again, and your PR to my solution is more than welcome. :)
 
-Happy hacking!
+Happy Hunting!
