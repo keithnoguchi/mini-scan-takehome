@@ -35,6 +35,16 @@ var ErrScanDataType = errors.New("Invalid scan data type")
 // ErrScanDataEncoding indicates the wrong scan data encoding.
 var ErrScanDataEncoding = errors.New("Invalid scan data encoding")
 
+// ErrBackend indicates the general processor backend error.
+//
+// The detailed error could be passed by the actual processor backend
+// but the following code will capture all the backend related errors.
+//
+//	if err := ...; errors.Is(processing.ErrBackend) {
+//	   ...
+//	}
+var ErrBackend = errors.New("Processor Backend error")
+
 // Processor interface to represent the message processor.
 type Processor interface {
 	// Process processes the incoming Scan data.

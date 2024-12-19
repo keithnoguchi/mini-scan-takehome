@@ -78,10 +78,7 @@ func NewBuilder(
 	if err != nil {
 		return nil, err
 	}
-	processor, err := processing.NewProcessor(cfg)
-	if err != nil {
-		return nil, err
-	}
+	processor := processing.NewProcessor(cfg)
 	return &builder{
 		client:    client,
 		processor: processor,
