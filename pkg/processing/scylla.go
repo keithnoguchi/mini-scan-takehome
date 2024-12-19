@@ -13,12 +13,6 @@ type scyllaProcessor struct {
 	// Scylla cluster configuration.
 	clusterCfg *gocql.ClusterConfig
 
-	// For lazy initialization of Scylla session.
-	sessionOnce sync.Once
-
-	// Session creation error.
-	sessionErr error
-
 	// Scylla session.
 	session gocqlx.Session
 }
@@ -38,8 +32,7 @@ var servicesTable = table.New(table.Metadata{
 
 func newScyllaProcessor(cfg ProcessorConfig) Processor {
 	return &scyllaProcessor{
-		clusterCfg:  gocql.NewCluster(cfg.BackendURL().Host),
-		sessionOnce: sync.Once{},
+		clusterCfg: gocql.NewCluster(cfg.BackendURL().Host),
 	}
 }
 
@@ -64,18 +57,24 @@ func (p *scyllaProcessor) Close(ctx context.Context) {
 	p.session.Close()
 }
 
+// For lazy initialization of Scylla session by aquireSession().
+var (
+	scyllaSessionOnce sync.Once
+	scyllaSessionErr  error
+)
+
 // Utility function to acquire the ScyllaDB session lazily.
 func (p *scyllaProcessor) aquireSession() error {
-	p.sessionOnce.Do(func() {
+	scyllaSessionOnce.Do(func() {
 		session, err := gocqlx.WrapSession(p.clusterCfg.CreateSession())
 		if err != nil {
 			// We record the error when we couldn't create
 			// a session and keep the error for the later
 			// reference.
-			p.sessionErr = backendError(err)
+			scyllaSessionErr = backendError(err)
 			return
 		}
 		p.session = session
 	})
-	return p.sessionErr
+	return scyllaSessionErr
 }
